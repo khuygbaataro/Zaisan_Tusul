@@ -1,0 +1,26 @@
+{
+  "name": "zaisan-tusul-bot",
+  "version": "1.0.0",
+  "description": "Facebook Messenger AI chatbot for Zaisan High Land. Mongolian-only, Claude Opus 4.7, single project knowledge base.",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json && node scripts/copy-assets.cjs",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "dotenv": "^16.6.1",
+    "express": "^4.21.1",
+    "firebase-admin": "^12.7.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.7.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
