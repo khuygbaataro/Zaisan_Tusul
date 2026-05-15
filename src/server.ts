@@ -9,10 +9,10 @@
 //
 // Per-event flow:
 //   1. ACK 200 to FB immediately, then process in background (FB retries aggressive 200s).
-//   2. If the PSID has no /conversations doc yet OR the text is the "11" trigger →
-//      send the canned WELCOME_MESSAGE, log it, and skip Claude.
-//   3. Otherwise → run Claude (with show_photos tool), send its text reply, then
-//      send any exterior/interior photo attachments Claude requested.
+//   2. Run Claude — the system prompt instructs it to greet on empty history and never
+//      repeat the greeting on follow-up turns. There is no canned welcome anymore:
+//      every reply is intent-aware and grounded in the knowledge base.
+//   3. Send Claude's text reply, then any exterior/interior photos it requested.
 //   4. Persist the turn to Firestore /conversations/{psid} (best-effort, fire-and-forget).
 import "dotenv/config";
 import express, { type Request, type Response } from "express";
@@ -20,7 +20,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { runTurn, type PhotoCategory } from "./claude.js";
 import { getHistory, setHistory } from "./conversation.js";
-import { appendTurn, hasConversation } from "./conversationLog.js";
+import { appendTurn } from "./conversationLog.js";
 import {
   sendImageAttachment,
   sendText,
@@ -28,7 +28,6 @@ import {
   verifySignature,
   verifyWebhook,
 } from "./facebook.js";
-import { WELCOME_MESSAGE, isWelcomeTriggerText } from "./welcome.js";
 
 const app = express();
 
@@ -42,8 +41,7 @@ const PORT = Number(process.env.PORT ?? 8080);
 
 // Serve photos directly from this server so FB Messenger can fetch them without any
 // external dependency. Files live in <repo>/public; at runtime (dist/server.js) that
-// folder is two levels up from dist/ — i.e. ../public. Cache aggressively because the
-// filenames are immutable.
+// folder is two levels up from dist/ — i.e. ../public.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.resolve(here, "..", "public");
 app.use(
@@ -54,9 +52,6 @@ app.use(
   })
 );
 
-// Public base URL the bot reports to Facebook for image attachments. Defaults to the
-// Render service URL inferred from RENDER_EXTERNAL_URL; fall back to PUBLIC_SITE_URL if
-// set; final fallback is empty (the bot will skip photos rather than send broken links).
 function resolvePublicBaseUrl(): string {
   const explicit = process.env.PUBLIC_SITE_URL;
   if (explicit) return explicit.replace(/\/$/, "");
@@ -152,21 +147,6 @@ async function handleEvent(event: MessagingEvent): Promise<void> {
   console.log(`[msg in] ${psid}: ${text}`);
 
   await sendTypingOn(psid).catch(() => undefined);
-
-  const firstContact = !(await hasConversation(psid));
-  if (firstContact || isWelcomeTriggerText(text)) {
-    await sendText(psid, WELCOME_MESSAGE).catch((err) =>
-      console.error("[fb] sendText welcome failed", err)
-    );
-    const seeded = [
-      ...getHistory(psid),
-      { role: "user" as const, content: text },
-      { role: "assistant" as const, content: WELCOME_MESSAGE },
-    ];
-    setHistory(psid, seeded);
-    void appendTurn(psid, text, WELCOME_MESSAGE);
-    return;
-  }
 
   let result;
   try {
