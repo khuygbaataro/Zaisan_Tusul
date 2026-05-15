@@ -31,7 +31,6 @@ export async function runTurn(
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: 500,
-      temperature: 0.3,
       system: [
         {
           type: "text",
